@@ -1,0 +1,7 @@
+{"loopflag":true,"start":0}
+<GOTO,1,1,,,>
+<GOTO,1,-1,,,>
+<SYN,stringA>  # Ask server to broadcast stringA to all other rovers
+<GOTO,-1,-1,,,>
+<GOTO,-1,1,,,>
+<SYN,stringB>  # Ask server to broadacst stringB to all othe rovers

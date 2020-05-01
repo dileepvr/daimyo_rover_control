@@ -1,0 +1,150 @@
+* Seeding star-connected network architecture with chatroom server
+
+- Source: https://www.geeksforgeeks.org/simple-chat-room-using-python/
+
+- Use [[./star_network_server_test.py]] and [[./star_network_client_test.py]] to
+  test. Run =python <program_name> localhost 8081= in separate terminals
+  for server and client. =8081= is an example port number.
+
+- Using =select()= to check state of sockets (meaning Linux/unix systems
+  only). Spawns parallel threads using the =threading= python module.
+
+- [[file:star_network_server_test.py::class%20thread_with_trace(threading.Thread):][thread_with_trace()]] class uses the python =trace= module to enable
+  killing a thread from main thread. Ended up not really using this.
+
+* Using =threading.Rlock()= for multithreaded variable read/write
+
+- To access same memory from multiple threads in a thread-safe manner.
+
+- See [[./rlock_server_test.py]] for how. It contains a new class named
+  [[file:rlock_server_test.py::class%20Rover:][Rover()]]. When instantiated, the class starts a sub-function ([[file:rlock_server_test.py::def%20run_loop(self):][run_loop()]])
+  as a thread.
+
+- The class contains an instance variable named =state=. Client can toggle
+  it by sending strings =<state0>= and =<state1>=. Server prints the values
+  for all instantiated "rovers" when it receives the string =states= from
+  =stdin= (terminal input).
+
+- Both the main thread and the rover threads need to access =rover.state=
+  instance variable. They use =lock.acquire()= and =lock.release()=.
+* Assembling chopped up TCP packets into messages
+
+- TCP can fragment strings arbitrarily. They will need to be reassembled at
+  the receiver. [[file:daimyo_utils_test.py::def%20TCPcompose(growstr='',%20newstr='',%20start='<',%20end='>',][TCPcompose()]] function in [[./daimyo_utils_test.py]] tries to
+  capture "messages" encapsulated between distict =start= and =end= strings
+  (default '<' and '>').
+
+- The [[file:daimyo_utils_test.py::class%20Rover:][Rover()]] class in [[./daimyo_utils_test.py]] is using [[file:daimyo_utils_test.py::def%20TCPcompose(growstr='',%20newstr='',%20start='<',%20end='>',][TCPcompose()]]. Test
+  it with the [[./command_server_test.py]] script.
+
+- [[./command_server_test.py]] now uses =getopt= module for command line
+  parsing, and there is rudimentary use of =logging= module.
+* Basic server-rover commands and messages
+
+- Use [[./command_and_control_server.py]] to test these, which in turn imports
+  [[./daimyo_utils.py]]. Use [[./start_network_client_test.py]] to test commands
+  and messages by hand, or use a virtual rover in
+  [[./dummy_field_river_ver0.py]].
+
+- There are two new functions within the [[file:daimyo_utils.py::class%20Rover:][Rover()]] class: [[file:daimyo_utils.py::def%20msg_parser(self):][msg_parser()]] and
+  [[file:daimyo_utils.py::def%20clean_send(self):][clean_send()]].
+
+- Commands are sent from server threads to field rover. Messages are sent
+  from field rover to server threads. All commands/messages are
+  encapsulated between angle brackets ('<', and '>'). For example, a
+  command reads =<SETPOS,0.01,0.107,>= to set xy-coordinates of the field
+  rover. The last comma designates a following optional field left blank.
+
+- The encapsulated command/message is a string with comma (',') separated
+  fields. The first field is compulsorily populated and denotes type of
+  command/message. The type dictates number of fields in the string. Field
+  rovers shall communicate a =version= string to the server thread, which
+  in turn dictates the command/message types that the field rover
+  understands.
+
+- =version= '=0=' commands/messages, fields, and descriptions (=[]= indicate optional):
+
+|-----+---------+--------------------------+----------------------------------------------------------+------------------|
+| C/M | type    | fields                   | description                                              | expected reply   |
+|-----+---------+--------------------------+----------------------------------------------------------+------------------|
+|     |         |                          | <10>                                                     |                  |
+| C   | ID      | none                     | Ask for identity details                                 | MYID             |
+| C   | POS     | none                     | Ask position and orientation                             | MYPOS            |
+| C   | SETPOS  | x,y,[Nangle]             | Set x,y. Angle (b/w x-axis and north) optional           | ACK              |
+| C   | PRES    | none                     | Ask for precision of location and orientation            | MYPRES           |
+| C   | SETPRES | Dxy,[Dangle]             | Set precision                                            | ACK              |
+| C   | MAXVEL  | none                     | Ask for maximum velocity                                 | MYMAXV           |
+| C   | HEART   | [time]                   | Set periodic reply with MYPOS (time in ms)               | ACK+MYPOS(reg.)  |
+| C   | SILENT  | none                     | Stop heartbeat state (see above)                         | ACK              |
+| C   | HALT    | none                     | Stop everything, enter IDLE state                        | ACK              |
+| C   | FWD     | dist,[vel],[time]        | Go forward (m), speed (m/s), timeout (ms)                | ACK/COL/TIMEOUT  |
+| C   | BWD     | dist,[vel],[time]        | Same as above, but go backward                           | ACK/COL/TIMEOUT  |
+| C   | CFWD    | [vel],[time]             | Forward @ vel until collision or timeout                 | COL/TIMEOUT      |
+| C   | CBWD    | [vel],[time]             | Backward @ vel until collision or timeout                | COL/TIMEOUT      |
+| C   | TURN    | angle,[time]             | Turn TO new angle (deg.) w/ x-axis                       | ACK/COL/TIMEOUT  |
+| C   | ATURN   | dir,rangle,[time]        | Turn BY 'rangle', dir [0=left, else right]               | ACK/COL/TIMEOUT  |
+| C   | CTURN   | dir,[time]               | Continuous turn in dir [0=left, else right]              | COL/TIMEOUT      |
+| C   | GOTO    | x,y,[vel],[angle],[time] | Go to (x, y) @ speed vel and orient to angle within time | ACK/COL/TIMEOUT  |
+| C   | OBS     | [angle],[time]           | Ask for distance of obstacle (in front/@angle)           | DOBS/COL/TIMEOUT |
+| C   | POBS    | dist,[angle],[time]      | Move to 'dist' meters from obstacle @angle               | ACK/COL/TIMEOUT  |
+| C   | DIE     | none                     | Inform that server is closing connection                 | none             |
+|-----+---------+--------------------------+----------------------------------------------------------+------------------|
+| M   | MYID    | name,version             | Return string and integer                                | none             |
+| M   | MYPOS   | x,y,angle                | Floats (m). Angle (deg.) w/ x-axis                       | none             |
+| M   | MYPRES  | Dxy,Dangle               | Float (m). Angle (deg.) precision                        | none             |
+| M   | MYMAXV  | maxvel                   | Float (m/s)                                              | none             |
+| M   | ACK     | [state]                  | Acknowledge, int(state) defaults to no change            | none             |
+| M   | COL     | x,y                      | Collision, w/ estimated obstacle location                | none             |
+| M   | FAIL    | none                     | Report unknown failure (server will kill you)            | none             |
+| M   | TIMEOUT | none                     | Task timeout                                             | none             |
+| M   | DOBS    | dist                     | Distance of obstacle (reply to OBS)                      | none             |
+| M   | BYE     | none                     | Inform that field rover is closing connection            | none             |
+|-----+---------+--------------------------+----------------------------------------------------------+------------------|
+
+- Commas are necessary to designate field even if field value is optional. For
+  example, =<HEART,>= is valid, as is =<HEART,1000>=, but =<HEART>= is invalid.
+
+- Additional command/message set for =version= '=0_RFID=' (backwards compatible
+  with =version= '=0='):
+
+|-----+--------+----------------------+----------------------------------------+------------------|
+| C/M | type   | fields               | description                            | expected reply   |
+|-----+--------+----------------------+----------------------------------------+------------------|
+| C   | SEARCH | [dr],[rfid_uid],time | Search for RFID tag within radius 'dr' | ACK+RFID/TIMEOUT |
+|-----+--------+----------------------+----------------------------------------+------------------|
+| M   | RFID   | x,y,rfid_uid         | Report RFID tag found at x,y           | none             |
+|-----+--------+----------------------+----------------------------------------+------------------|
+
+- Field rover will only execute one command at a time and will not store
+  future commands to be executed. Do that in server. Rely on =ACK= replies.
+
+- =version= '=0=' =Rover()= class state variables
+
+  + =name= - String representing name of rover. Does not have to be unique.
+  + =version= - String representing version. At the time of this writing,
+    '0' and '1' are valid.
+  + =[x, y, angle]= - Location (meters) and orientation (degrees) with north.
+  + =[Dxy, Dangle]= - Precision up to which to execute commands.
+  + =maxvel= - Maximum speed. latches to this if asked to exceed.
+  + =state= - =[st_IDLE, st_MOVE, st_WAIT, st_PAUSE, st_LISTEN, st_SEARCH]=
+
+| state     | Integer value | Description                       |
+|-----------+---------------+-----------------------------------|
+| st_IDLE   |             0 | Field rover is idle.              |
+| st_MOVE   |             1 | Is moving/turning.                |
+| st_WAIT   |             2 | Is waiting for some time.         |
+| st_PAUSE  |             3 | Is waiting to be unpaused.        |
+| st_LISTEN |             4 | Listen for broadcast strings.     |
+| st_SEARCH |             5 | Searching (unused in version '0') |
+|-----------+---------------+-----------------------------------|
+
+  + =superstate= - Integer. Single-commands mode if =-1=. Else tracks
+    position in command sequence.
+  + =loopflag= - Boolean. If =True= and =superstate > -1=, command sequence
+    will be looped into a patrol route.
+  + =sflag= - Flag raised to interrupt main server thread when new data
+    message is available to be passed upstream.
+  + =smsg_buffer= - List of messages accrued and meant for upstream main
+    server thread (example: collisions, failed states, etc.).
+  + =paused= - freezes steps through a command sequence.
+  + =ackflag= - Received valid =ACK= message.

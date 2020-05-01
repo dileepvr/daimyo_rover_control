@@ -1,0 +1,4 @@
+{"loopflag":true,"start":1}
+<GOTO,1,1,,,>
+<GOTO,0,-1,,270,>
+<GOTO,-1,1,,,>

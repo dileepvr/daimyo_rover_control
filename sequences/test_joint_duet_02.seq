@@ -1,0 +1,9 @@
+{"loopflag":true,"start":0}
+<GOTO,0.5,0,,,>
+<LIS,positive>
+<TURN,180,>
+<SYN,turn_done>
+<GOTO,-0.5,0,,,>
+<LIS,negative>
+<TURN,0,>
+<SYN,turn_done>

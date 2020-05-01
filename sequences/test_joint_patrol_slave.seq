@@ -1,0 +1,5 @@
+{"loopflag":true,"start":0}
+<GOTO,0,0.5,,,>
+<LIS,stringA,stringC>  # Listen for stringA or stringC from a broadcast
+<GOTO,0,-0.5,,,>
+<LIS,stringB>  # Listen for string B from a broadcast, then proceed

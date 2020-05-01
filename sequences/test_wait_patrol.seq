@@ -1,0 +1,6 @@
+{"loopflag":true,"start":0}
+<GOTO,1,1,,,>
+<GOTO,0,-1,,,>
+<GOTO,0,0,,,>
+<WAIT,3.5> # Seconds. This won't be transmitted. Meant for rover thread on server
+<GOTO,-1,1,,,>
