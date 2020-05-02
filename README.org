@@ -75,23 +75,17 @@ other using the =threading.RLock()= facility and manipulating variables.
 [[./figures/schematic.png]]
 
 The rover class instances pass =commands= to the field rovers and receives
-=messages= from them. The =commands= (C) and =messages= are very limited in
-vocabulary. All =commands/messages= are encapsulated between angle brackets
-('=<=', and '=>='). For example, a command reads =<SETPOS,0.01,0.107,>= to
-set xy-coordinates of the field rover. The last comma designates a
-following optional field left blank.
+=messages= from them. The =commands= (C) and =messages= (M) are very
+limited in vocabulary. All =commands/messages= are encapsulated between
+angle brackets ('=<=', and '=>='). For example, a command reads
+=<SETPOS,0.01,0.107,>= to set xy-coordinates of the field rover. The last
+comma designates a following optional field left blank.
 
 The encapsulated command/message is a string with comma (',') separated
 fields. The first field is compulsorily populated and denotes type of
 command/message. The type dictates number of fields in the string. Field
 rovers shall communicate a =version= string to the server thread, which in
 turn dictates the command/message types that the field rover understands.
-
-The encapsulated =command/message= is a string with comma ('=,=') separated
-fields. The first field is compulsorily populated and denotes type of
-=command/message=. The type dictates number of fields in the string. Field
-rovers communicate a =version= string to the server thread, which in
-turn dictates the =command/message= types that the field rover understands.
 
 =version= '=0=' commands/messages, fields, and descriptions (=[]= indicate
 optional):
@@ -174,12 +168,12 @@ tutorial section.
 * Tutorial
 
 This section will demonstrate basic functionality with the aid of virtual
-rovers ([[./dummy_rover_v0.py]]). Install =bokeh 2.0.1= within your =python3=
+rovers ([[file:dummy_rover_v0.py]]). Install =bokeh 2.0.1= within your =python3=
 virtual environment using your preferred package manager (like =pip=).
 
 ** Basic commands and messages
 
-The server script [[./server_daimyo.py]] can be run as a main script in the
+The server script [[file:server_daimyo.py]] can be run as a main script in the
 command line:
 
 #+begin_src shell :eval no
@@ -192,7 +186,7 @@ strings typed into the console terminal (=sys.stdin=). These include:
 - =quit= : Close all rover connections and exit main =while= loop.
 - =names= : List all currently live rovers (names, rover versions, and
   thread names).
-- =<command>= : Broadcast properly formatted =command= (see [[cmdtbl]]) to all
+- =<command>= : Broadcast properly formatted =command= (see table) to all
   live rovers.
 - =CMD:<rovername>:<threadname>:<command>= Send properly formatted command
   to specific live rover with matching =rovername= and =threadname=.
@@ -240,7 +234,7 @@ similar to this:
 
 The virtual rover identified itself to the server as =Ronin76= (the number
 will be random between =0= and =99=), with compatibility version =0=. The
-server created a =Rover()= class instance (defined in [[./daimyo_utils.py]])
+server created a =Rover()= class instance (defined in [[file:daimyo_utils.py]])
 and started a TCP communication =while= loop for it in =Thread-1= using the
 =python3= =threading= module.
 
@@ -257,7 +251,7 @@ degrees. These are starting values that the virtual rover spawned with.
 
 Let us reset these parameters for the virtual rover by sending it the
 =command= =<SETPOS,0,0,90>=. Now the rover thinks that it is at the origin,
-facing the positive y-axis. The virtual rover coded in [[./dummy_rover_v0.py]]
+facing the positive y-axis. The virtual rover coded in [[file:dummy_rover_v0.py]]
 has been set to interpret the third float in the =command= as its new
 orientation. In real field rovers with digital compasses and an absolute
 sense of direction, this field is meant to be used to indicate the
@@ -268,7 +262,7 @@ Let us command the virtual rover to move "forward" by =10= meters at a
 speed of =0.5= meters per second (the maximum speed the virtual rover will
 move at). The =command= is =<FWD,10,0.5,>=. The last comma is for an
 optional field for a =timeout= parameter that we are leaving empty, as it
-has not been implemented in [[./dummy_rover_v0.py]]. Issuing this command to
+has not been implemented in [[file:dummy_rover_v0.py]]. Issuing this command to
 the virtual rover should cause it to move along the y-axis for about =20=
 seconds, at the end of which it will report its new position back using a
 =<MYPOS,...>= =message=. You will note that the position update only
@@ -279,7 +273,7 @@ angular speed by issuing =<TURN,180,>=.
 We can order the rover to give us periodic updates by toggling its
 heartbeat mode. To see this, let us two =command= strings. The first asks
 it to move "backwards" by =50= meters at its default speed (which for
-[[./dummy_rover_v0.py]] should be =0.3= m/s). For this, send it =<BWD,50,,>=.
+[[file:dummy_rover_v0.py]] should be =0.3= m/s). For this, send it =<BWD,50,,>=.
 Then, while the rover is "moving", we toggle the heartbeat mode with
 default period (=500= ms) by sending =<HEART,>=.
 
@@ -288,7 +282,7 @@ updates, send =<SILENT>=. This will be difficult to type into the console
 as it is being flooded with position updates. We can avoid this problem by
 passing the script's logging facility the =-i= (=INFO=) flag instead of hte
 =-d= (=DEBUG=) flag. Let us kill the virtual rover connection by sending
-=<DIE>=, and exit the main thread loop by typing =quit=. If you know check
+=<DIE>=, and exit the main thread loop by typing =quit=. If you now check
 the date-named subfolder inside the =datalogs= folder, in addition to a
 =serverlog*.log= file for this server session, you should see a timestamped
 =*.dat= file bearing the virtual rover's name. This should consist of the
@@ -320,7 +314,7 @@ the location =(x, y) = (-10, 5.7) m= and then turn to face the negative
 y-axis direction once there (=CMD:Ronin16:Thread-2:<GOTO,-10,5.7,,270,>=).
 Tell both rovers to issue periodic position updates by typing =<HEART,>=.
 You may then halt both rovers (=<HALT>=), disconnect both of them
-(=<DIE>=), and =quit= the server. If you know view the location history
+(=<DIE>=), and =quit= the server. If you now view the location history
 files for the two rovers, the one that was commanded to turn in place
 should only have one entry, whereas the one which was issued the ='GOTO'=
 =command= should have several entries due to the heartbeat updates.
@@ -400,25 +394,25 @@ rover's marker in the webGUI will not communicate this information to the
 field rover. The map-overlay is meant as a visual aid for help with
 charting patrol routes and designing =command sequences=.
 
-This repository comes with a =maps= directly containing three files:
-=empty_map.json=, =test_map.json=, and =test_map2.json=. Each of them
-contains a single =json= string which encodes a list of four python
-dictionaries in a specific order. The first dictionary has a single key
-'=ang=', whose value is a single element list. The element is a float
-representing the angular direction of North in degrees. The second
-dictionary has two keys: '=x=' and '=y=', with values being lists for
-coordinates of point-like obstacles (rendered as circle markers in the
-webGUI). The third dictionary also has two keys labeled '=x=' and '=y=',
-whose values are lists of lists with vertex coordinates for multiple lines
-(rendered using =bokeh='s =multi_line= facility). The last dictionary in
-the list has three keys: '=x=', '=y=', and '=name='; whose values are lists
-of coordinates and alphanumeric string names of point-like landmarks
-(rendered in the webGUI as orange diamond markers). The toolbar to the
-top-right of the graphing area contains tools for adding to and
-manipulating these dictionaries using the mouse (click to add, drag to
-move, double-click to manipulate). The following =gif= animation
-demonstrates this, as well as the use of the =Pan= and =Wheel Zoom= tools
-for navigation:
+This repository comes with a =maps= directory containing three files:
+[[file:maps/empty_map.json]], [[file:maps/test_map.json]], and
+[[file:maps/test_map2.json]]. Each of them contains a single =json= string
+which encodes a list of four python dictionaries in a specific order. The
+first dictionary has a single key '=ang=', whose value is a single element
+list. The element is a float representing the angular direction of North in
+degrees. The second dictionary has two keys: '=x=' and '=y=', with values
+being lists for coordinates of point-like obstacles (rendered as circle
+markers in the webGUI). The third dictionary also has two keys labeled
+'=x=' and '=y=', whose values are lists of lists with vertex coordinates
+for multiple lines (rendered using =bokeh='s =multi_line= facility). The
+last dictionary in the list has three keys: '=x=', '=y=', and '=name=';
+whose values are lists of coordinates and alphanumeric string names of
+point-like landmarks (rendered in the webGUI as orange diamond markers).
+The toolbar to the top-right of the graphing area contains tools for adding
+to and manipulating these dictionaries using the mouse (click to add, drag
+to move, double-click to manipulate, select and hit backspace to delete).
+The following =gif= animation demonstrates this, as well as the use of the
+=Pan= and =Wheel Zoom= tools for navigation:
 
 [[./figures/webGUI_03.gif]]
 
@@ -436,7 +430,7 @@ them start sending commands to the field rovers.
 The most important feature of =daimyo= is the ability to script sequences
 of behaviors for the rovers to follow. This repository contains a folder
 named =sequences=, which consists of text files with the =*.seq= extension.
-The contents of one such file (=test_wedge.seq=) is as follows:
+The contents of one such file ([[file:sequences/ftest_wedge.seq]]) is as follows:
 
 #+begin_example
 {"loopflag":false,"start":0}
@@ -451,7 +445,7 @@ value respectively. The remaining lines consist of commands to be sent to
 the rover. The =loopflag= determines if the sequence of commands should be
 looped, and the =start= value determines which step of the sequence to
 start from. Empty lines in the file will be ignored. The server will send a
-=command= in the sequence, wait for the rover to return to and =st_IDLE=
+=command= in the sequence, wait for the rover to return to an =st_IDLE=
 state (communicated with an =ACK= message), and then increment the sequence
 index. The webGUI has a means of reading these files, manipulating their
 fields, and starting the sequence. This can also be done by entering the
@@ -464,20 +458,20 @@ expected. Sending =<HALT>=, or any other explicit command will fully
 interrupt the sequence such that it cannot be resumed from that state. The
 sequence files can contain additional types of lines besides =commands=
 meant for transmission to the field rover. For example, the file
-=test_wait_patrol.seq= uses the =<WAIT,...>= keyword to instruct the rover
-thread to wait for a specified number of seconds before transmitting the
-next =command=.
+[[file:sequences/test_wait_patrol.seq]] uses the =<WAIT,...>= keyword to
+instruct the rover thread to wait for a specified number of seconds before
+transmitting the next =command=.
 
 Other keywords (besides =<WAIT,...>=) that are specific to are =<SYN,...>=
 and =<LIS,...>=. They can be used to broadcast and listen for strings
 to/from other rovers respectively. Again, these are all internal to the
 server and involve communications between threads. None of these data are
-being transmitted to and from field rovers over the TCP link The TCP
-vocabulary is limited by what has been covered in table [[cmdtbl]].
+being transmitted to and from field rovers over the TCP link. The TCP
+vocabulary is limited by what has been covered in table above.
 
 To demonstrate their use, consider the sequence files
-=test_joint_patrol_master.seq= and =test_joint_patrol_slave.seq=. The
-master file reads:
+[[file:sequences/test_joint_patrol_master.seq]] and
+[[file:sequences/test_joint_patrol_slave.seq]]. The master file reads:
 
 #+begin_example
 {"loopflag":true,"start":0}
@@ -492,8 +486,8 @@ master file reads:
 A rover thread following the master patrol route will broadcast '=stringA='
 to all other rover threads once it reaches the =(1, -1)= xy-coordinates
 before continuing. Similarly, it broadcasts '=stringB=' when it reaches the
-location =(-1, 1)=. Now let us look at the =test_joint_patrol_slave.seq=
-file:
+location =(-1, 1)=. Now let us look at the
+[[file:sequences/test_joint_patrol_slave.seq]] file:
 
 #+begin_example
 {"loopflag":true,"start":0}
@@ -509,7 +503,7 @@ or '=stringC=' being broadcast from any of the other rovers once it reaches
 broadcasts, it will continue on to location =(0, -0.5)=, upon reaching
 which it starts to listen for a '=stringB=' broadcast. All rover threads
 remember the latest =10= broadcast strings from other rovers only. But
-should a rover thread inter the '=st_LISTEN=' state, it will forget its
+should a rover thread enter the '=st_LISTEN=' state, it will forget its
 entire list of recorded broadcasts once it spots the string it was
 listening for within it. Since both these sequences are loops, the
 behavior looks like so:
@@ -521,8 +515,8 @@ Due to the constant recording of past broadcasts, one is able to
 disruption. It will only introduce a delay in making certain rovers
 'listen' for longer. For full mesh-like coordinated behaviors, it is
 advisable to have all rovers both broadcast and listen for strings in that
-order. The sequence files =test_joint_duet_01.seq= and
-=test_joint_duet_02.seq= result in this show:
+order. The sequence files [[file:sequences/test_joint_duet_01.seq]] and
+[[file:sequences/test_joint_duet_02.seq]] result in this show:
 
 [[./figures/webGUI_06.gif]]
 
