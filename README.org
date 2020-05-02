@@ -1,150 +1,534 @@
-* Seeding star-connected network architecture with chatroom server
+* Introduction
 
-- Source: https://www.geeksforgeeks.org/simple-chat-room-using-python/
+The *Daimyo Rover Control Server* is licensed under the [[file:LICENSE][MIT License]].
 
-- Use [[./star_network_server_test.py]] and [[./star_network_client_test.py]] to
-  test. Run =python <program_name> localhost 8081= in separate terminals
-  for server and client. =8081= is an example port number.
+Copyright (c) 2020 Dileep V. Reddy (GPG fingerprint: E4E5 0022 5ED1 7577)
 
-- Using =select()= to check state of sockets (meaning Linux/unix systems
-  only). Spawns parallel threads using the =threading= python module.
+This repository hosts =python= code for a central server meant to
+communicate with and control simple microcontroller-based mobile rovers
+over TCP connections. It allows one to issue scripted sequences of commands
+and conditional commands that rely on message-passing between the rovers
+through the server. It can display real-time data on a browser-rendered
+GUI, and record location history. It has been tested with the following
+packages and environment:
 
-- [[file:star_network_server_test.py::class%20thread_with_trace(threading.Thread):][thread_with_trace()]] class uses the python =trace= module to enable
-  killing a thread from main thread. Ended up not really using this.
+- =Debian 4.19.37-5= (=Linux kernel 4.19.0-5amd64=)
+- =python 3.7.3=
+- =numpy 1.18.2=
+- =bokeh 2.0.1= (optional for web GUI)
+- =Jinja2 2.11.2= (optional for web GUI)
+- =tornado 6.0.4= (optional for web GUI)
 
-* Using =threading.Rlock()= for multithreaded variable read/write
+No installation required. Just run the [[file:server_daimyo.py]] script using
+your =python3= interpreter. The [[file:dummt_rover_v0.py]] script is provided
+for testing as a pretend/virtual rover that connects to the server locally
+at the proper port. Several instances of virtual rovers can be run.
 
-- To access same memory from multiple threads in a thread-safe manner.
+Any rover capable of establishing a TCP connection (say over WiFi) and
+interpreting a small set of messages and commands can be interacted with.
+Rover version '=0=' need the following abilities:
 
-- See [[./rlock_server_test.py]] for how. It contains a new class named
-  [[file:rlock_server_test.py::class%20Rover:][Rover()]]. When instantiated, the class starts a sub-function ([[file:rlock_server_test.py::def%20run_loop(self):][run_loop()]])
-  as a thread.
+- Establish and maintain a wireless TCP connection
+- Have a means of measuring distance traveled (forward and backward) and
+  angle turned relative to any starting point (a.k.a. dead reckoning)
+- Basic collision detection (two limit switches in front, for example)
+- [Optional]  know absolute orientation via use of a digital
+  compass/magnetometer
 
-- The class contains an instance variable named =state=. Client can toggle
-  it by sending strings =<state0>= and =<state1>=. Server prints the values
-  for all instantiated "rovers" when it receives the string =states= from
-  =stdin= (terminal input).
+Rover version '=0_RFID=' requires an added ability to search for a landmark
+(such as an RFID tag on the ground) within a small area around its
+location.
 
-- Both the main thread and the rover threads need to access =rover.state=
-  instance variable. They use =lock.acquire()= and =lock.release()=.
-* Assembling chopped up TCP packets into messages
+The =daimyo= server is meant for small hobby projects that use =avr=
+microcontrollers like the =ATMEL= chips on the =Arduino= development
+boards. WiFi connectivity is possible through IoT chips such as the
+=ESP8266= on the =ESP-01= breakout board. The dead reckoning ability is
+trivially achieved using optical encoded discs. Several digital compasses
+exist on the market for absolute orientation, but they all need to be
+calibrated while placed in the operating environment. The =13.56 MHz RFID=
+technology offers a range of about =3 cm= with the right antenna. An
+=RC522= board mounted below the rover chassis with =2 cm= of ground
+clearance can easily detect =Mifare classic 1K RFID= stickers on the floor.
+A chassis with tank tracks is also recommended. Some combination of
+landmark searching, collision detection, and absolute orientation awareness
+can be exploited to make sure that all the cumulative errors in
+dead-reckoning location tracking can be compensated for. For instance,
+scattering the operating area with strategically placed =RFID= tags and
+having the rovers hop between them in arbitrary sequences can mimic fairly
+complex path-finding behavior without the need for image processing or
+excessive computational and memory resources.
 
-- TCP can fragment strings arbitrarily. They will need to be reassembled at
-  the receiver. [[file:daimyo_utils_test.py::def%20TCPcompose(growstr='',%20newstr='',%20start='<',%20end='>',][TCPcompose()]] function in [[./daimyo_utils_test.py]] tries to
-  capture "messages" encapsulated between distict =start= and =end= strings
-  (default '<' and '>').
+I will eventually be uploading the hardware schematics and firmware for a
+rover that is meant to work with =daimyo server=. Link to that repository
+coming soon.
 
-- The [[file:daimyo_utils_test.py::class%20Rover:][Rover()]] class in [[./daimyo_utils_test.py]] is using [[file:daimyo_utils_test.py::def%20TCPcompose(growstr='',%20newstr='',%20start='<',%20end='>',][TCPcompose()]]. Test
-  it with the [[./command_server_test.py]] script.
+* How it works under the hood
 
-- [[./command_server_test.py]] now uses =getopt= module for command line
-  parsing, and there is rudimentary use of =logging= module.
-* Basic server-rover commands and messages
+The server listens for new TCP connections on a specific port. Once a field
+rover connects to it, the server instantiates a rover class, which starts
+a communication loop in its own thread. The rover threads do not
+communicate with each other directly. They have to flag the server main
+thread to act like the middle man. The optional web GUI runs a
+=tornado/bokeh IOLoop= in its own thread. The threads communicate with each
+other using the =threading.RLock()= facility and manipulating variables.
 
-- Use [[./command_and_control_server.py]] to test these, which in turn imports
-  [[./daimyo_utils.py]]. Use [[./start_network_client_test.py]] to test commands
-  and messages by hand, or use a virtual rover in
-  [[./dummy_field_river_ver0.py]].
+[[./figures/schematic.png]]
 
-- There are two new functions within the [[file:daimyo_utils.py::class%20Rover:][Rover()]] class: [[file:daimyo_utils.py::def%20msg_parser(self):][msg_parser()]] and
-  [[file:daimyo_utils.py::def%20clean_send(self):][clean_send()]].
+The rover class instances pass =commands= to the field rovers and receives
+=messages= from them. The =commands= (C) and =messages= are very limited in
+vocabulary. All =commands/messages= are encapsulated between angle brackets
+('=<=', and '=>='). For example, a command reads =<SETPOS,0.01,0.107,>= to
+set xy-coordinates of the field rover. The last comma designates a
+following optional field left blank.
 
-- Commands are sent from server threads to field rover. Messages are sent
-  from field rover to server threads. All commands/messages are
-  encapsulated between angle brackets ('<', and '>'). For example, a
-  command reads =<SETPOS,0.01,0.107,>= to set xy-coordinates of the field
-  rover. The last comma designates a following optional field left blank.
+The encapsulated command/message is a string with comma (',') separated
+fields. The first field is compulsorily populated and denotes type of
+command/message. The type dictates number of fields in the string. Field
+rovers shall communicate a =version= string to the server thread, which in
+turn dictates the command/message types that the field rover understands.
 
-- The encapsulated command/message is a string with comma (',') separated
-  fields. The first field is compulsorily populated and denotes type of
-  command/message. The type dictates number of fields in the string. Field
-  rovers shall communicate a =version= string to the server thread, which
-  in turn dictates the command/message types that the field rover
-  understands.
+The encapsulated =command/message= is a string with comma ('=,=') separated
+fields. The first field is compulsorily populated and denotes type of
+=command/message=. The type dictates number of fields in the string. Field
+rovers communicate a =version= string to the server thread, which in
+turn dictates the =command/message= types that the field rover understands.
 
-- =version= '=0=' commands/messages, fields, and descriptions (=[]= indicate optional):
+=version= '=0=' commands/messages, fields, and descriptions (=[]= indicate
+optional):
 
-|-----+---------+--------------------------+----------------------------------------------------------+------------------|
-| C/M | type    | fields                   | description                                              | expected reply   |
-|-----+---------+--------------------------+----------------------------------------------------------+------------------|
-|     |         |                          | <10>                                                     |                  |
-| C   | ID      | none                     | Ask for identity details                                 | MYID             |
-| C   | POS     | none                     | Ask position and orientation                             | MYPOS            |
-| C   | SETPOS  | x,y,[Nangle]             | Set x,y. Angle (b/w x-axis and north) optional           | ACK              |
-| C   | PRES    | none                     | Ask for precision of location and orientation            | MYPRES           |
-| C   | SETPRES | Dxy,[Dangle]             | Set precision                                            | ACK              |
-| C   | MAXVEL  | none                     | Ask for maximum velocity                                 | MYMAXV           |
-| C   | HEART   | [time]                   | Set periodic reply with MYPOS (time in ms)               | ACK+MYPOS(reg.)  |
-| C   | SILENT  | none                     | Stop heartbeat state (see above)                         | ACK              |
-| C   | HALT    | none                     | Stop everything, enter IDLE state                        | ACK              |
-| C   | FWD     | dist,[vel],[time]        | Go forward (m), speed (m/s), timeout (ms)                | ACK/COL/TIMEOUT  |
-| C   | BWD     | dist,[vel],[time]        | Same as above, but go backward                           | ACK/COL/TIMEOUT  |
-| C   | CFWD    | [vel],[time]             | Forward @ vel until collision or timeout                 | COL/TIMEOUT      |
-| C   | CBWD    | [vel],[time]             | Backward @ vel until collision or timeout                | COL/TIMEOUT      |
-| C   | TURN    | angle,[time]             | Turn TO new angle (deg.) w/ x-axis                       | ACK/COL/TIMEOUT  |
-| C   | ATURN   | dir,rangle,[time]        | Turn BY 'rangle', dir [0=left, else right]               | ACK/COL/TIMEOUT  |
-| C   | CTURN   | dir,[time]               | Continuous turn in dir [0=left, else right]              | COL/TIMEOUT      |
-| C   | GOTO    | x,y,[vel],[angle],[time] | Go to (x, y) @ speed vel and orient to angle within time | ACK/COL/TIMEOUT  |
-| C   | OBS     | [angle],[time]           | Ask for distance of obstacle (in front/@angle)           | DOBS/COL/TIMEOUT |
-| C   | POBS    | dist,[angle],[time]      | Move to 'dist' meters from obstacle @angle               | ACK/COL/TIMEOUT  |
-| C   | DIE     | none                     | Inform that server is closing connection                 | none             |
-|-----+---------+--------------------------+----------------------------------------------------------+------------------|
-| M   | MYID    | name,version             | Return string and integer                                | none             |
-| M   | MYPOS   | x,y,angle                | Floats (m). Angle (deg.) w/ x-axis                       | none             |
-| M   | MYPRES  | Dxy,Dangle               | Float (m). Angle (deg.) precision                        | none             |
-| M   | MYMAXV  | maxvel                   | Float (m/s)                                              | none             |
-| M   | ACK     | [state]                  | Acknowledge, int(state) defaults to no change            | none             |
-| M   | COL     | x,y                      | Collision, w/ estimated obstacle location                | none             |
-| M   | FAIL    | none                     | Report unknown failure (server will kill you)            | none             |
-| M   | TIMEOUT | none                     | Task timeout                                             | none             |
-| M   | DOBS    | dist                     | Distance of obstacle (reply to OBS)                      | none             |
-| M   | BYE     | none                     | Inform that field rover is closing connection            | none             |
-|-----+---------+--------------------------+----------------------------------------------------------+------------------|
+#+NAME: cmdtbl
+|-----+---------+--------------------------+---------------------------------------------------+------------------|
+| C/M | type    | fields                   | description                                       | expected reply   |
+|-----+---------+--------------------------+---------------------------------------------------+------------------|
+|     |         |                          | <10>                                              |                  |
+| C   | ID      | none                     | Ask for identity (name, version)                  | MYID             |
+| C   | POS     | none                     | Ask position and orientation                      | MYPOS            |
+| C   | SETPOS  | x,y,[Nangle]             | Set x,y. Angle (b/w x-axis and north) optional    | ACK              |
+| C   | PRES    | none                     | Ask for precision of location and orientation     | MYPRES           |
+| C   | SETPRES | Dxy,[Dangle]             | Set precision                                     | ACK              |
+| C   | MAXVEL  | none                     | Ask for maximum velocity                          | MYMAXV           |
+| C   | HEART   | [time]                   | Set periodic reply with MYPOS (time in ms)        | ACK+MYPOS(reg.)  |
+| C   | SILENT  | none                     | Stop heartbeat state (see above)                  | ACK              |
+| C   | HALT    | none                     | Stop everything, enter IDLE state                 | ACK              |
+| C   | FWD     | dist,[vel],[time]        | Go forward (m), speed (m/s), timeout (ms)         | ACK/COL/TIMEOUT  |
+| C   | BWD     | dist,[vel],[time]        | Same as above, but go backward                    | ACK/COL/TIMEOUT  |
+| C   | CFWD    | [vel],[time]             | Forward @ vel until collision or timeout          | COL/TIMEOUT      |
+| C   | CBWD    | [vel],[time]             | Backward @ vel until collision or timeout         | COL/TIMEOUT      |
+| C   | TURN    | angle,[time]             | Turn to new (absolute) angle (deg.) w/ x-axis     | ACK/COL/TIMEOUT  |
+| C   | ATURN   | dir,rangle,[time]        | Turn by (relative) 'rangle', dir [0=CCW, else CW] | ACK/COL/TIMEOUT  |
+| C   | CTURN   | dir,[time]               | Continuous turn in dir [0=CCW, else CW]           | COL/TIMEOUT      |
+| C   | GOTO    | x,y,[vel],[angle],[time] | Go to (x, y) @ speed vel and orient to angle      | ACK/COL/TIMEOUT  |
+| C   | OBS     | [angle],[time]           | Ask for distance of obstacle (in front/@ angle)   | DOBS/COL/TIMEOUT |
+| C   | POBS    | dist,[angle],[time]      | Move to 'dist' meters from obstacle @ angle       | ACK/COL/TIMEOUT  |
+| C   | DIE     | none                     | Inform that server is closing connection          | none             |
+|-----+---------+--------------------------+---------------------------------------------------+------------------|
+| M   | MYID    | name,version             | Return strings for name and version               | none             |
+| M   | MYPOS   | x,y,angle                | Floats (m). Angle (deg.) w/ x-axis                | none             |
+| M   | MYPRES  | Dxy,Dangle               | Float (m). Angle (deg.) precision                 | none             |
+| M   | MYMAXV  | maxvel                   | Float (m/s) maximum velocity                      | none             |
+| M   | ACK     | [state]                  | Acknowledge, int(state) defaults to no change     | none             |
+| M   | COL     | x,y                      | Collision, w/ estimated obstacle location         | none             |
+| M   | FAIL    | none                     | Report unknown failure (server might kill you)    | none             |
+| M   | TIMEOUT | none                     | Task timeout                                      | none             |
+| M   | DOBS    | dist                     | Distance of obstacle (reply to OBS)               | none             |
+| M   | BYE     | none                     | Inform that field rover is closing connection     | none             |
+|-----+---------+--------------------------+---------------------------------------------------+------------------|
 
-- Commas are necessary to designate field even if field value is optional. For
-  example, =<HEART,>= is valid, as is =<HEART,1000>=, but =<HEART>= is invalid.
+Commas are necessary to designate field even if field value is optional.
+For example, =<HEART,>= is valid, as is =<HEART,1000>=, but =<HEART>= is
+invalid.
 
-- Additional command/message set for =version= '=0_RFID=' (backwards compatible
-  with =version= '=0='):
+Additional =command/message= set for =version= '=0_RFID=' (backwards
+compatible with =version= '=0='):
 
-|-----+--------+----------------------+----------------------------------------+------------------|
-| C/M | type   | fields               | description                            | expected reply   |
-|-----+--------+----------------------+----------------------------------------+------------------|
-| C   | SEARCH | [dr],[rfid_uid],time | Search for RFID tag within radius 'dr' | ACK+RFID/TIMEOUT |
-|-----+--------+----------------------+----------------------------------------+------------------|
-| M   | RFID   | x,y,rfid_uid         | Report RFID tag found at x,y           | none             |
-|-----+--------+----------------------+----------------------------------------+------------------|
+|-----+--------+-----------------+----------------------------------------+------------------|
+| C/M | type   | fields          | description                            | expected reply   |
+|-----+--------+-----------------+----------------------------------------+------------------|
+| C   | SEARCH | [dr],[uid],time | Search for RFID tag within radius 'dr' | ACK+RFID/TIMEOUT |
+|-----+--------+-----------------+----------------------------------------+------------------|
+| M   | RFID   | x,y,uid         | Report RFID tag UID found at x,y       | none             |
+|-----+--------+-----------------+----------------------------------------+------------------|
 
-- Field rover will only execute one command at a time and will not store
-  future commands to be executed. Do that in server. Rely on =ACK= replies.
+Field rover will only execute one command at a time and will not store
+future commands to be executed. Command sequences like patrol routes or
+coordinated conditional instructions are stored in the =Rover()= class
+instances within the server, which rely on =ACK= replies from the field
+rovers to track progress through the states. These states are tracked by
+the =Rover()= class instance, and are stored as an integer:
 
-- =version= '=0=' =Rover()= class state variables
+|-----------+---------------+--------------------------------------|
+| state     | Integer value | Description                          |
+|-----------+---------------+--------------------------------------|
+| st_IDLE   |             0 | Field rover is idle.                 |
+| st_MOVE   |             1 | Is moving/turning.                   |
+| st_WAIT   |             2 | Is waiting for some time.\dagger     |
+| st_PAUSE  |             3 | Is waiting to be unpaused.\dagger    |
+| st_LISTEN |             4 | Listen for broadcast strings.\dagger |
+| st_SEARCH |             5 | Searching (unused in version '=0=')  |
+|-----------+---------------+--------------------------------------|
+\dagger - For sequences only.
 
-  + =name= - String representing name of rover. Does not have to be unique.
-  + =version= - String representing version. At the time of this writing,
-    '0' and '1' are valid.
-  + =[x, y, angle]= - Location (meters) and orientation (degrees) with north.
-  + =[Dxy, Dangle]= - Precision up to which to execute commands.
-  + =maxvel= - Maximum speed. latches to this if asked to exceed.
-  + =state= - =[st_IDLE, st_MOVE, st_WAIT, st_PAUSE, st_LISTEN, st_SEARCH]=
+Command sequences and patrol routes will be covered in the following
+tutorial section.
 
-| state     | Integer value | Description                       |
-|-----------+---------------+-----------------------------------|
-| st_IDLE   |             0 | Field rover is idle.              |
-| st_MOVE   |             1 | Is moving/turning.                |
-| st_WAIT   |             2 | Is waiting for some time.         |
-| st_PAUSE  |             3 | Is waiting to be unpaused.        |
-| st_LISTEN |             4 | Listen for broadcast strings.     |
-| st_SEARCH |             5 | Searching (unused in version '0') |
-|-----------+---------------+-----------------------------------|
+* Tutorial
 
-  + =superstate= - Integer. Single-commands mode if =-1=. Else tracks
-    position in command sequence.
-  + =loopflag= - Boolean. If =True= and =superstate > -1=, command sequence
-    will be looped into a patrol route.
-  + =sflag= - Flag raised to interrupt main server thread when new data
-    message is available to be passed upstream.
-  + =smsg_buffer= - List of messages accrued and meant for upstream main
-    server thread (example: collisions, failed states, etc.).
-  + =paused= - freezes steps through a command sequence.
-  + =ackflag= - Received valid =ACK= message.
+This section will demonstrate basic functionality with the aid of virtual
+rovers ([[./dummy_rover_v0.py]]). Install =bokeh 2.0.1= within your =python3=
+virtual environment using your preferred package manager (like =pip=).
+
+** Basic commands and messages
+
+The server script [[./server_daimyo.py]] can be run as a main script in the
+command line:
+
+#+begin_src shell :eval no
+python server_daimyo.py
+#+end_src
+
+This drops you into a =while= loop that is responsive to some command
+strings typed into the console terminal (=sys.stdin=). These include:
+
+- =quit= : Close all rover connections and exit main =while= loop.
+- =names= : List all currently live rovers (names, rover versions, and
+  thread names).
+- =<command>= : Broadcast properly formatted =command= (see [[cmdtbl]]) to all
+  live rovers.
+- =CMD:<rovername>:<threadname>:<command>= Send properly formatted command
+  to specific live rover with matching =rovername= and =threadname=.
+- =SEQ:<rovername>:<threadname>:<seq_filename>=  Send a full-path sequence
+  file name =seq_filename= to a specific live rover with matching
+  =rovername= and =threadname=, and initiate sequence execution. The
+  sequence file format will be covered in the [[id:8ccd57e9-f1ee-430e-a92c-60c40ae27e4d][Command sequences and patrols]]
+  subsection.
+
+For now, close the server script loop by typing =quit= into the terminal
+and hitting enter. This will return you to your shell prompt. This will
+also have created a new directory named =datalogs=, and a subdirectory
+within it bearing the date as its name. Inside that, you will find a
+=serverlog_%H_%M_%S.log= file, the name bearing the time of creation. This
+file records the logger output from =python3='s =logging= module, which is
+also streamed to =sys.stdout= when running the script. The log file just
+created should be empty, as the default log level is =logging.WARNING=.
+This can be changed to =logging.INFO= or =logging.DEBUG= by providing =-i=
+or =-d= as command-line arguments respectively.
+
+Lets run the server again, this time with the =-d= flag:
+
+#+begin_src shell :eval no
+python server_daimyo.py -d
+#+end_src
+
+Typing =names= should produce no output, as no rovers have connected to the
+server yet. Open a new terminal tab/prompt and run the virtual rover
+script with the debug flag =-d=:
+
+#+begin_src shell :eval no
+python dummy_rover_v0.py -d
+#+end_src
+
+The server terminal should now have dumped an =INFO= log statement to
+=sys.stdout=, letting you know that it received a connection request from
+=localhost= (ip address =127.0.0.1=). The default port is =8081=, but can
+be changed by supplying it as a command-line argument with =-p= flag in
+both scripts. Typing =names= in the server terminal again will print a list
+similar to this:
+
+#+begin_src python :eval no
+['Ronin76', '0', 'Thread-1']
+#+end_src
+
+The virtual rover identified itself to the server as =Ronin76= (the number
+will be random between =0= and =99=), with compatibility version =0=. The
+server created a =Rover()= class instance (defined in [[./daimyo_utils.py]])
+and started a TCP communication =while= loop for it in =Thread-1= using the
+=python3= =threading= module.
+
+In the server terminal, type =<ID>= to repeat the identification process.
+This won't change the name of the virtual rover. Had the virtual rover
+never identified itself, the server would have assigned a placeholder name
+=Rover0= and a default version of =0= to it.
+
+To query the current position and orientation of the virtual rover, enter
+=<POS>=. You should see a log =INFO= message that reads =Updated POS to
+(<x>, <y>, <angle>)=, where =x= and =y= random coordinates in the =(-1,
++1)= range, and the =angle= is a random orientation between =0= and =360=
+degrees. These are starting values that the virtual rover spawned with.
+
+Let us reset these parameters for the virtual rover by sending it the
+=command= =<SETPOS,0,0,90>=. Now the rover thinks that it is at the origin,
+facing the positive y-axis. The virtual rover coded in [[./dummy_rover_v0.py]]
+has been set to interpret the third float in the =command= as its new
+orientation. In real field rovers with digital compasses and an absolute
+sense of direction, this field is meant to be used to indicate the
+direction of north relative to an x-axis. It is a means for the server to
+establish a common coordinate system between field rovers.
+
+Let us command the virtual rover to move "forward" by =10= meters at a
+speed of =0.5= meters per second (the maximum speed the virtual rover will
+move at). The =command= is =<FWD,10,0.5,>=. The last comma is for an
+optional field for a =timeout= parameter that we are leaving empty, as it
+has not been implemented in [[./dummy_rover_v0.py]]. Issuing this command to
+the virtual rover should cause it to move along the y-axis for about =20=
+seconds, at the end of which it will report its new position back using a
+=<MYPOS,...>= =message=. You will note that the position update only
+occurred after the execution of the =command=. To see this again, ask the
+virtual rover to turn towards the negative x-axis direction at its native
+angular speed by issuing =<TURN,180,>=.
+
+We can order the rover to give us periodic updates by toggling its
+heartbeat mode. To see this, let us two =command= strings. The first asks
+it to move "backwards" by =50= meters at its default speed (which for
+[[./dummy_rover_v0.py]] should be =0.3= m/s). For this, send it =<BWD,50,,>=.
+Then, while the rover is "moving", we toggle the heartbeat mode with
+default period (=500= ms) by sending =<HEART,>=.
+
+To halt the motion at any time, send =<HALT>=. To stop the position
+updates, send =<SILENT>=. This will be difficult to type into the console
+as it is being flooded with position updates. We can avoid this problem by
+passing the script's logging facility the =-i= (=INFO=) flag instead of hte
+=-d= (=DEBUG=) flag. Let us kill the virtual rover connection by sending
+=<DIE>=, and exit the main thread loop by typing =quit=. If you know check
+the date-named subfolder inside the =datalogs= folder, in addition to a
+=serverlog*.log= file for this server session, you should see a timestamped
+=*.dat= file bearing the virtual rover's name. This should consist of the
+location history of the rover, with the first column being the output of
+=python3='s =time.time()= function. These files are only updated if (1) the
+rover reports its position using a =<MYPOS,...>= formatted =message=
+(ensured periodically using heartbeat), and (2) the XY-location changes.
+This would mean that the periodic location updates received in heartbeat
+mode when the rover is standing still or turning in place will not grow the
+location history.
+
+Before moving onto the [[id:e0c2e33c-dbf6-4b3c-9f82-2263187e935c][web GUI]] subsection, let us briefly play with two
+virtual rovers concurrently connected. Run the server script in one
+terminal, and run two separate instances of the dummy virtual rover script
+in two separate terminals. Typing =names= into the server terminal should
+how list both rovers like so (the numbers in the name are randomly
+assigned):
+
+#+begin_src python :eval no
+['Ronin35', '0', 'Thread-1']
+['Ronin16', '0', 'Thread-2']
+#+end_src
+
+Now, we can ask the virtual rover on =Thread-1= specifically for its
+position by typing =CMD:Ronin35:Thread-1:<POS>=. We can also ask the first
+rover to continuously turn in place in the clockwise direction
+(=CMD:Ronin35:Thread-1:<CTURN,1,>=), and inform the second rover to go to
+the location =(x, y) = (-10, 5.7) m= and then turn to face the negative
+y-axis direction once there (=CMD:Ronin16:Thread-2:<GOTO,-10,5.7,,270,>=).
+Tell both rovers to issue periodic position updates by typing =<HEART,>=.
+You may then halt both rovers (=<HALT>=), disconnect both of them
+(=<DIE>=), and =quit= the server. If you know view the location history
+files for the two rovers, the one that was commanded to turn in place
+should only have one entry, whereas the one which was issued the ='GOTO'=
+=command= should have several entries due to the heartbeat updates.
+
+** web GUI
+   :PROPERTIES:
+   :ID:       e0c2e33c-dbf6-4b3c-9f82-2263187e935c
+   :END:
+
+To start the server with the webGUI enabled, run the script with the =-w=
+flag like so:
+
+#+begin_src shell :eval no
+python server_daimyo.py -w -i
+#+end_src
+
+Now open your browser and visit [[http://localhost:5006/]] (this port number
+can be changed inside the script). You should then be greeted with an
+interface like this:
+
+[[./figures/webGUI_01.png]]
+
+The screen is broadly divided into three panes. The left pane is for
+commands and rover statuses. The center pane is the coordinate graph, and
+the right pane is for map overlays. Let us focus on the left pane first.
+
+With the server still running, spawn a virtual rover in another terminal.
+In the browser, the center pane now displays a green diamond+triangle
+marker at some position within (x, y) \in (\pm1, \pm1) range, in some
+orientation. The dropdown menu below the red button labeled '=DIE=' now
+lists the virtual rover by name, and the text box to its immediate right
+shows some state variables associated with it. All of the command buttons
+on the left pane can now operate on your single virtual rover. The terminal
+that the server script was started in is still responsive to your inputs
+into =sys.stdin=.
+
+Spawn a second virtual rover in yet another terminal. This will add to the
+select-able entries in the dropdown menu. Now you can use the menu to
+select which rovers you would like to operate the UI button callbacks on.
+Only the buttons labeled '=ALL=' will operate on all rovers in the list.
+
+In the lower half of the left pane below the =HEARTBEAT/SILENT= toggle
+buttons is a panel with two tabs labeled "=Single Commands=" and "=Command
+sequences=". We will address the =Command sequences= tab in the next
+[[id:8ccd57e9-f1ee-430e-a92c-60c40ae27e4d][subsection]]. The =Single Commands= tab has its own dropdown menu with a list
+of commands that require fields. Below the menu is a table with two columns
+for the field description and field value. These fields values can be
+changed in these cells, and clicking on the green '=SEND=' button will
+transmit the corresponding =command= string to the selected rover. Click on
+the "HEARTBEAT ALL" button at the top left for real time (refreshed every
+=500= ms, can be changed in the script) location update and best intuitive
+feedback.
+
+In addition to the =SEND= button, for three of the fielded =commands=:
+'=SETPOS=', '=TURN=', and '=GOTO='; merely clicking/taping on any location
+in the graphing area will modify the fields, and double-clicking will issue
+a 'send' to the selected rover. The '=Enable map edit=' checkbox on the
+right pane has to be unchecked for this to work. The toolbar to the
+top-right of the graphing area has popup tool tips for all the tools. The
+=Tap= tool, if enabled, will allow you to select the rovers by directly
+clicking on their marker representations instead of using the rover
+dropdown menu. The following =gif= animation demonstrates all the
+capabilities discussed thus far.
+
+[[./figures/webGUI_02.gif]]
+
+The right pane contains the map-overlay functions. This is meant for
+rendering, manipulating, and storing an overlay made of lines, dots, and
+diamond markers for named landmarks (like =RFID= tags). The map-overlay is
+purely for server-side GUI display, and the rovers are not made aware of it
+explicitly within our regime of =command/message= vocabulary. Since there
+is a facility for rovers to report (x, y) locations of point-like obstacles
+(think voxels) that they detect using the =COL= and =DOBS= type =messages=,
+the map-overlay can be updated in real time with new information from
+field rovers if desired. But merely drawing an obstacle in front of your
+rover's marker in the webGUI will not communicate this information to the
+field rover. The map-overlay is meant as a visual aid for help with
+charting patrol routes and designing =command sequences=.
+
+This repository comes with a =maps= directly containing three files:
+=empty_map.json=, =test_map.json=, and =test_map2.json=. Each of them
+contains a single =json= string which encodes a list of four python
+dictionaries in a specific order. The first dictionary has a single key
+'=ang=', whose value is a single element list. The element is a float
+representing the angular direction of North in degrees. The second
+dictionary has two keys: '=x=' and '=y=', with values being lists for
+coordinates of point-like obstacles (rendered as circle markers in the
+webGUI). The third dictionary also has two keys labeled '=x=' and '=y=',
+whose values are lists of lists with vertex coordinates for multiple lines
+(rendered using =bokeh='s =multi_line= facility). The last dictionary in
+the list has three keys: '=x=', '=y=', and '=name='; whose values are lists
+of coordinates and alphanumeric string names of point-like landmarks
+(rendered in the webGUI as orange diamond markers). The toolbar to the
+top-right of the graphing area contains tools for adding to and
+manipulating these dictionaries using the mouse (click to add, drag to
+move, double-click to manipulate). The following =gif= animation
+demonstrates this, as well as the use of the =Pan= and =Wheel Zoom= tools
+for navigation:
+
+[[./figures/webGUI_03.gif]]
+
+Closing or refreshing the webGUI, or opening multiple instances will not
+disrupt the server or any of the rover threads. You will only lose the
+webGUI state (modified fields in the data tables, for instance). Running
+two webGUI concurrently however allows for some confusion if the both of
+them start sending commands to the field rovers.
+
+** Command sequences and patrols
+   :PROPERTIES:
+   :ID:       8ccd57e9-f1ee-430e-a92c-60c40ae27e4d
+   :END:
+
+The most important feature of =daimyo= is the ability to script sequences
+of behaviors for the rovers to follow. This repository contains a folder
+named =sequences=, which consists of text files with the =*.seq= extension.
+The contents of one such file (=test_wedge.seq=) is as follows:
+
+#+begin_example
+{"loopflag":false,"start":0}
+<GOTO,-1,-1,,,>
+<GOTO,0,1,,,>
+<GOTO,1,-1,,,>
+#+end_example
+
+The first line should always be a =json= string for a dictionary with two
+keys: '=loopflag=' and '=start=', with a boolean and a non-negative integer
+value respectively. The remaining lines consist of commands to be sent to
+the rover. The =loopflag= determines if the sequence of commands should be
+looped, and the =start= value determines which step of the sequence to
+start from. Empty lines in the file will be ignored. The server will send a
+=command= in the sequence, wait for the rover to return to and =st_IDLE=
+state (communicated with an =ACK= message), and then increment the sequence
+index. The webGUI has a means of reading these files, manipulating their
+fields, and starting the sequence. This can also be done by entering the
+=SEQ:...= format input into the =sys.stdin= of the server terminal.
+
+[[./figures/webGUI_04.gif]]
+
+Hitting =PAUSE= and =UNPAUSE= will freeze and resume a sequence as
+expected. Sending =<HALT>=, or any other explicit command will fully
+interrupt the sequence such that it cannot be resumed from that state. The
+sequence files can contain additional types of lines besides =commands=
+meant for transmission to the field rover. For example, the file
+=test_wait_patrol.seq= uses the =<WAIT,...>= keyword to instruct the rover
+thread to wait for a specified number of seconds before transmitting the
+next =command=.
+
+Other keywords (besides =<WAIT,...>=) that are specific to are =<SYN,...>=
+and =<LIS,...>=. They can be used to broadcast and listen for strings
+to/from other rovers respectively. Again, these are all internal to the
+server and involve communications between threads. None of these data are
+being transmitted to and from field rovers over the TCP link The TCP
+vocabulary is limited by what has been covered in table [[cmdtbl]].
+
+To demonstrate their use, consider the sequence files
+=test_joint_patrol_master.seq= and =test_joint_patrol_slave.seq=. The
+master file reads:
+
+#+begin_example
+{"loopflag":true,"start":0}
+<GOTO,1,1,,,>
+<GOTO,1,-1,,,>
+<SYN,stringA>  # Ask server to broadcast stringA to all other rovers
+<GOTO,-1,-1,,,>
+<GOTO,-1,1,,,>
+<SYN,stringB>  # Ask server to broadacst stringB to all othe rovers
+#+end_example
+
+A rover thread following the master patrol route will broadcast '=stringA='
+to all other rover threads once it reaches the =(1, -1)= xy-coordinates
+before continuing. Similarly, it broadcasts '=stringB=' when it reaches the
+location =(-1, 1)=. Now let us look at the =test_joint_patrol_slave.seq=
+file:
+
+#+begin_example
+{"loopflag":true,"start":0}
+<GOTO,0,0.5,,,>
+<LIS,stringA,stringC>  # Listen for stringA or stringC from a broadcast
+<GOTO,0,-0.5,,,>
+<LIS,stringB>  # Listen for string B from a broadcast, then proceed
+#+end_example
+
+This sequence instructs the rover thread to "listen" for either '=stringA='
+or '=stringC=' being broadcast from any of the other rovers once it reaches
+=(0, 0.5)=. Once it sees one of these in its history of recorded
+broadcasts, it will continue on to location =(0, -0.5)=, upon reaching
+which it starts to listen for a '=stringB=' broadcast. All rover threads
+remember the latest =10= broadcast strings from other rovers only. But
+should a rover thread inter the '=st_LISTEN=' state, it will forget its
+entire list of recorded broadcasts once it spots the string it was
+listening for within it. Since both these sequences are loops, the
+behavior looks like so:
+
+[[./figures/webGUI_05.gif]]
+
+Due to the constant recording of past broadcasts, one is able to
+=PAUSE/UNPAUSE= any individual rover without serious pathological
+disruption. It will only introduce a delay in making certain rovers
+'listen' for longer. For full mesh-like coordinated behaviors, it is
+advisable to have all rovers both broadcast and listen for strings in that
+order. The sequence files =test_joint_duet_01.seq= and
+=test_joint_duet_02.seq= result in this show:
+
+[[./figures/webGUI_06.gif]]
+
+The aim of this project was to keep the rover communication as simple as
+possible and shift all complexity to the server side. It is meant to serve
+as a starting point for performing complex, coordinated, navigational tasks
+using simple rovers with limited computational resources and as few
+internal states as possible. I hope you'll find this tool useful, and share
+any possible improvements you end up making to it.

@@ -68,13 +68,12 @@ def check_sane_str(instr):
 
 def webapp(doc):
 
-    threadname = threading.currentThread().getName()
-    weblog = logging.getLogger('webUI:%s' % threadname)
     global updatecmd  # Integer for next_tick_callback to update DataSources
     global eventx, eventy
     global list_of_rovers, roverlistchanged, roverchangetype
     global webroverlist, rover_indx, rovermenu, seqdict
     global infodict, infofmt, data_s, data_seq, seqdict
+    # global weblog
     updatecmd = 0
     [eventx, eventy] = [0, 0]
     webroverlist = dict([('name', []), ('version', []), ('hflag', []),
@@ -204,7 +203,6 @@ def webapp(doc):
                                  ("font-size", "large"),
                                  ("color", "DarkRed"),
                                  ("opacity", 1.0)]))
-    # roverstate.style['color'] = 'whitesmoke'  # Hide (background color)
 
     # Compass indicator (right panel)
     fc = figure(x_range=(-1, 1), y_range=(-1, 1), title="Compass",
@@ -433,7 +431,7 @@ def webapp(doc):
             logbox.text = ''
 
     def set_logbox(text="""""", color="Green", fade=True):
-        weblog.debug(text)
+        # weblog.debug(text)
         logbox.text += text+'<br />'
         logbox.style['opacity'] += 1.0  # Use as a counter
         if logbox.style['opacity'] > 3.0:
@@ -640,19 +638,6 @@ def webapp(doc):
                 if rover_indx == len(list_of_rovers)-1:
                     set_roverstate(rover)
                 rovermenu.title = 'Live Rovers: %d' % len(webroverlist['name'])
-            # elif roverchangetype[0:3] == 'ID:':  # A rover has changed ID
-            #     tempindx = int(roverchangetype[3:])
-            #     rover = list_of_rovers[tempindx]
-            #     _tmpvar = rover.name+'_____('+rover.thread.getName()+')'
-            #     set_logbox(text="Rover %s changed ID to %s." %
-            #                (webroverlist['name'][tempindx], _tmpvar))
-            #     webroverlist['name'][tempindx] = _tmpvar
-            #     webroverlist['version'][tempindx] = rover.version
-            #     rovermenu.options = []  # Seems to be necessary for update
-            #     rovermenu.options = webroverlist['name']
-            #     if rover_indx == tempindx:
-            #         rovermenu.value = _tmpvar
-            #         set_roverstate(rover)
             elif roverchangetype[0:4] == 'DIE:':  # A rover has died
                 rovermenu.options = []  # Seems to be necessary for update
                 tempindx = int(roverchangetype[4:])
@@ -1261,17 +1246,22 @@ class thread_with_trace(threading.Thread):
         self.killed = True
 
 
-list_of_rovers = ['rover0', 'rover2']
 roverlistchanged = False
 roverchangetype = ''
 list_of_rovers = []
+streamhandler = []
+filehandler = []
+numerical_level = logging.WARNING
+weblog = []
 IP_address = 'localhost'
 Port = 8081
 
 if __name__ == '__main__':
 
-    threadname = threading.currentThread().getName()
-    mainlog = logging.getLogger('server:%s' % threadname)
+    from bokeh.util import logconfig
+    logconfig.basicConfig(level=logging.WARNING)
+
+    webUIflag = False
     try:
         opts, args = getopt.getopt(sys.argv[1:], "daipw",
                                    ["debug", "info",
@@ -1299,23 +1289,34 @@ if __name__ == '__main__':
             webUIthread.start()
             webUIflag = True
 
-    logging.basicConfig(
-        filename=logfilename, filemode='w',
-        level=numerical_level,
-        datefmt='%I:%M:%S %p',
-        format=logfmt)
+    # Remove old formatting from all handlers in root logger
+    root_logger = logging.getLogger()
+    for h in root_logger.handlers:
+        h.setFormatter(
+            logging.Formatter('%(name)s:%(levelname)s:\t%(message)s'))
+        h.setLevel(logging.WARNING)
+    
+    threadname = threading.currentThread().getName()
+    mainlog = logging.getLogger('server:%s' % threadname)
+
+    mainlog.setLevel(numerical_level)
     streamhandler = logging.StreamHandler(sys.stdout)
     streamhandler.setLevel(numerical_level)
     streamformatter = logging.Formatter('%(name)s:%(levelname)s:\t%(message)s')
     streamhandler.setFormatter(streamformatter)
+
+    filehandler = logging.FileHandler(logfilename)
+    filehandler.setLevel(numerical_level)
+    fileformatter = logging.Formatter(logfmt, datefmt='%I:%M:%S %p')
+    filehandler.setFormatter(fileformatter)
+
+    mainlog.addHandler(filehandler)
     mainlog.addHandler(streamhandler)
 
-    # filehandler = logging.FileHandler(logfilename)
-    # filehandler.setLevel(logging.INFO)
-    # fileformatter = logging.Formatter(
-    #     '$(asctime)s:%(name)s:%(levelname)s:\t%(message)s')
-    # filehandler.setFormatter(fileformatter)
-    # mainlog.addHandler(filehandler)
+    # weblog = logging.getLogger('webUI:')
+    # weblog.setLevel(numerical_level)
+    # weblog.addHandler(filehandler)
+    # weblog.addHandler(streamhandler)
 
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -1338,7 +1339,8 @@ if __name__ == '__main__':
         # 1. Handle new rovers joining
         if server in inlist:
             conn, addr = server.accept()
-            newrover = Rover(conn, addr)
+            newrover = Rover(conn, addr,
+                             streamhandler, filehandler, numerical_level)
             mainlock.acquire()
             list_of_rovers.append(newrover)
             roverlistchanged = True
@@ -1366,9 +1368,6 @@ if __name__ == '__main__':
                 if rover.smsg_buffer:
                     upmsg = rover.smsg_buffer.pop(0)
                     if upmsg[0:5] == '<MYID':
-                        # roverlistchanged = True
-                        # roverindex = list_of_rovers.index(rover)
-                        # roverchangetype = 'ID:%d' % roverindex
                         mainlog.debug("ID change detected.")
                     elif upmsg[0:5] == '<SYN,':
                         # Broadcast string to all other rovers

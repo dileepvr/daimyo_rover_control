@@ -1,0 +1,37 @@
+.bk .bk-btn-group button {
+  font-size: 14pt;
+  font-weight: bold;
+}
+.bk-root .bk-data-table {
+  font-size: 12pt;
+}
+.bk-root .bk-cell-editor-completion {
+  font-size: 14pt;
+}
+.bk .bk-slider-title {
+  font-size: 14pt;
+}
+.bk-root .bk {
+  font-size: 14pt;
+  font-weight: bold;
+}
+body {
+  margin-top: 50px;
+  margin-left: 30px;
+}
+.bk-root .bk-tab {
+    background-color: whitesmoke;
+    color: darkred;
+    font-style: italic;
+}
+
+.bk-root .bk-tabs-header .bk-tab.bk-active{
+background-color: white;
+color: blue;
+font-style: normal;
+font-weight: bold;
+}
+
+.bk-root .bk-tabs-header .bk-tab:hover{
+background-color: white
+}

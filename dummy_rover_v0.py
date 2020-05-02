@@ -30,9 +30,9 @@ version = '0'
 IP_address = 'localhost'  # command server IP
 Port = 8081  # command server port
 Nangle = 90.0  # Nangle is between north and x-axis
-xpos = 0  # 2*np.random.random()-1
-ypos = 0  # 2*np.random.random()-1
-angle = 0  # 360*np.random.random()
+xpos = 2*np.random.random()-1
+ypos = 2*np.random.random()-1
+angle = 360*np.random.random()
 # angle is direction rover is facing (derivable from digital compass)
 [Dxy, Dangle] = [0.01, 1]  # Precision (meters, degrees.)
 maxvel = 0.5  # maximum speed (m/s)
@@ -57,7 +57,7 @@ class multiple_timers():
         ping = 0.0
         gotostep = 0
         # For dummy rover with no obstacles, GOTO has three steps:
-        # turn (3), move (2), turn(1).
+        # turn (1), move (2), turn(3).
         # First turn to orient. Last turn if GOTO command had angle field
         goto_x = 0.0
         goto_y = 0.0
@@ -207,7 +207,6 @@ def state_machine_chug():
     #  'ATURN', 'CTURN', 'GOTO', 'OBS', 'POBS']
     if moveflag == verb_dict['GOTO']:
         # Just received command
-        # if mytimers.gotostep == 0 and oldmoveflag != moveflag:
         if oldmoveflag != moveflag:
             state = 1  # Moving
             sendmsg = '<ACK,%d>' % state

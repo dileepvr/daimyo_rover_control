@@ -151,9 +151,12 @@ st_dict = dict([(0, 'st_IDLE'),
 
 class Rover:
 
-    def __init__(self, conn, addr):
+    def __init__(self, conn, addr, streamhandler, filehandler, loglevel):
         self.conn = conn
         self.addr = addr
+        self.logsh = streamhandler  # Stream handler for logging
+        self.logfh = filehandler  # File handler for logging (main log file)
+        self.loglvl = loglevel  # Log level
         self.name = 'Rover-0'
         self.version = '0'
         self.x = 0.0  # Spawn point (meters)
@@ -190,13 +193,13 @@ class Rover:
         self.syn_str = []  # Strings broadcasted from main thread
         self.syn_limit = 10  # Maximum number of syn broadcasts to store
         self.ackflag = False  # Marking reception of ACK message
+        self.thread = threading.Thread(target=self.run_loop)
+        # self.thread.setName(self.name)
         _ddate = datetime.datetime.now()
         self.dataprefix = 'datalogs/'+_ddate.strftime(
             '%Y_%m_%d/')+_ddate.strftime('%H_%M_%S_')
         self.datafile = self.dataprefix+self.name+'.dat'
         self.datfid = open(self.datafile, 'a')
-        self.thread = threading.Thread(target=self.run_loop)
-        # self.thread.setName(self.name)
         _msgdat = '# ID, version, Thread: ({on}, v{ov}, {thread}) '.format(
             on=self.name, ov=self.version,
             thread=self.thread.getName())
@@ -204,6 +207,9 @@ class Rover:
         self.datfid.write('# Time (s)\tx (m)\ty (m)\n')
         self.datfid.flush()
         self.log = logging.getLogger(self.name+':'+self.thread.getName())
+        self.log.setLevel(self.loglvl)
+        self.log.addHandler(self.logfh)
+        self.log.addHandler(self.logsh)
         self.thread.start()
 
     def state_machine_chug(self):
@@ -272,8 +278,6 @@ class Rover:
             # Unpaused
             self.log.info('Unpaused. Continuing sequence (%d of %d)' %
                           (self.superstate, self.numseq-1))
-            # print('Unpause restoring state %s to %s' %
-            #       (st_dict[self.state], st_dict[self.pause_s_store]))
             self.state = self.pause_s_store
             self.pause_s_store = 0  # Reset this
             self.wflag = True
@@ -373,23 +377,33 @@ class Rover:
 
             if _floatflag:
                 if _type == 'MYID':
-                    # Change data logging file name
-                    self.datfid.close()
-                    os.rename(
-                        self.datafile, self.dataprefix+str(_fields[0])+'.dat')
-                    self.datafile = self.dataprefix+str(_fields[0])+'.dat'
-                    self.datfid = open(self.datafile, 'a')
-                    _msgdat = '# ID: ({on}, v{ov}) -> ({nn}, v{nv})'.format(
-                        on=self.name, ov=self.version,
-                        nn=_fields[0], nv=_fields[1])
-                    self.datfid.write(_msgdat+'\n')
-                    self.datfid.flush()
+                    if [self.name, self.version] != [str(_fields[0]),
+                                                     str(_fields[1])]:
+                        # Change data logging file name
+                        self.datfid.close()
+                        os.rename(
+                            self.datafile, self.dataprefix+str(
+                                _fields[0])+'.dat')
+                        self.datafile = self.dataprefix+str(_fields[0])+'.dat'
+                        self.datfid = open(self.datafile, 'a')
+                        _msgdat = '# ID: ({on}, v{ov})'.format(
+                            on=self.name, ov=self.version)
+                        _msgdat += ' -> ({nn}, v{nv})'.format(
+                            nn=_fields[0], nv=_fields[1])
+                        self.datfid.write(_msgdat+'\n')
+                        self.datfid.flush()
                     self.name = str(_fields[0])
                     self.version = str(_fields[1])
                     self.log.info("Changing (name, version) to (%s, %s)" %
                                   (self.name, self.version))
+                    for _handler in self.log.handlers:
+                        _handler.close()
+                        self.log.removeFilter(_handler)
                     self.log = logging.getLogger(
                         self.name+':'+self.thread.getName())
+                    self.log.setLevel(self.loglvl)
+                    self.log.addHandler(self.logfh)
+                    self.log.addHandler(self.logsh)
                     self.sflag = True  # Report ID change to main server
                     self.smsg_buffer.append(self.message)
                     self.wflag = True  # Report ID change to webUI
@@ -406,8 +420,14 @@ class Rover:
                         self.datfid.write(_msgdat)
                         self.datfid.flush()
                         [self.xold, self.yold] = [self.x, self.y]
-                    if self.state == 0:  # Only log at ends
+                    if self.ackflag and self.state == 0:  # st_IDLE
+                        if self.superstate == -1:
+                            self.ackflag = False
                         self.log.info(
+                            "Updated POS to (%.3f, %.3f, %.3f)" %
+                            (self.x, self.y, self.angle))
+                    else:
+                        self.log.debug(
                             "Updated POS to (%.3f, %.3f, %.3f)" %
                             (self.x, self.y, self.angle))
                     self.wflag = True  # Send upstream to webUI thread
@@ -523,6 +543,9 @@ class Rover:
         return _sendflag
 
     def die(self):
+        for _handler in self.log.handlers:
+            _handler.close()
+            self.log.removeFilter(_handler)
         self.datfid.close()
         self.conn.close()
         self.lock.acquire()
