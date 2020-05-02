@@ -430,7 +430,7 @@ them start sending commands to the field rovers.
 The most important feature of =daimyo= is the ability to script sequences
 of behaviors for the rovers to follow. This repository contains a folder
 named =sequences=, which consists of text files with the =*.seq= extension.
-The contents of one such file ([[file:sequences/ftest_wedge.seq]]) is as follows:
+The contents of one such file ([[file:sequences/test_wedge.seq]]) is as follows:
 
 #+begin_example
 {"loopflag":false,"start":0}
