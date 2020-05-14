@@ -469,7 +469,7 @@ class Rover:
                     if _type == 'FAIL':
                         self.log.warning("Failure reported!")
                         try:
-                            self.conn.send('<HALT>'.encode())
+                            self.conn.sendall('<HALT>'.encode())
                         except OSError:
                             self.die()
                         self.superstate = -1
@@ -531,7 +531,7 @@ class Rover:
                 self.wflag = False
                 self.wlist = ['SILENT']
             try:
-                self.conn.send(self.command.encode())
+                self.conn.sendall(self.command.encode())
                 self.log.info("Sent: %s" % self.command)
             except OSError:
                 self.die()
@@ -602,7 +602,7 @@ class Rover:
                         '<HEA', '<SIL']:
                     # If in middle of command sequence
                     try:
-                        self.conn.send('<HALT>'.encode())
+                        self.conn.sendall('<HALT>'.encode())
                     except OSError:
                         self.die()
                     self.superstate = -1
