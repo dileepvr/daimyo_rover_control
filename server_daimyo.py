@@ -1253,7 +1253,7 @@ streamhandler = []
 filehandler = []
 numerical_level = logging.WARNING
 weblog = []
-IP_address = 'localhost'
+IP_address = ''  # Use 'localhost' for local testing only
 Port = 8081
 
 if __name__ == '__main__':
