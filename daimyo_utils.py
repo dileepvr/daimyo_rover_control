@@ -413,16 +413,16 @@ class Rover:
                     [self.x, self.y, self.angle] = [
                         float(_fields[0]), float(_fields[1]),
                         float(_fields[2])]
-                    if [self.xold, self.yold self.angold] != [
-                            self.x, self.y self.angle]:
+                    if [self.xold, self.yold, self.angold] != [
+                            self.x, self.y, self.angle]:
                         # _msgdat = '{t}\t{x}\t{y}'.format(
                         #     t=time(), x=self.x, y=self.y)
                         _msgdat = '%.1f\t%.3f\t%.3f\t%.3f\n' % (
                             time(), self.x, self.y, self.angle)
                         self.datfid.write(_msgdat)
                         self.datfid.flush()
-                        [self.xold, self.yold self.angold] = [
-                            self.x, self.y self.angle]
+                        [self.xold, self.yold, self.angold] = [
+                            self.x, self.y, self.angle]
                     if self.ackflag and self.state == 0:  # st_IDLE
                         if self.superstate == -1:
                             self.ackflag = False
