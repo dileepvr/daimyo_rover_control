@@ -289,10 +289,10 @@ the date-named subfolder inside the =datalogs= folder, in addition to a
 location history of the rover, with the first column being the output of
 =python3='s =time.time()= function. These files are only updated if (1) the
 rover reports its position using a =<MYPOS,...>= formatted =message=
-(ensured periodically using heartbeat), and (2) the XY-location changes.
-This would mean that the periodic location updates received in heartbeat
-mode when the rover is standing still or turning in place will not grow the
-location history.
+(ensured periodically using heartbeat), and (2) the XY-location or angular
+orientation changes. This would mean that the periodic location updates
+received in heartbeat mode when the rover is standing still or turning in
+place will not grow the location history.
 
 Before moving onto the [[id:e0c2e33c-dbf6-4b3c-9f82-2263187e935c][web GUI]] subsection, let us briefly play with two
 virtual rovers concurrently connected. Run the server script in one

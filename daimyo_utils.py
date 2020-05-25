@@ -164,6 +164,7 @@ class Rover:
         self.xold = 0.0
         self.yold = 0.0
         self.angle = 0.0  # Angle of forward with global (map) x-axis
+        self.angold = 0.0
         self.Dxy = 0.01  # XY-precision (meters)
         self.Dangle = 1  # Angle precision (degrees)
         self.maxvel = 0.01  # Maximum (latching) speed (m/s)
@@ -204,7 +205,7 @@ class Rover:
             on=self.name, ov=self.version,
             thread=self.thread.getName())
         self.datfid.write(_msgdat+'\n')
-        self.datfid.write('# Time (s)\tx (m)\ty (m)\n')
+        self.datfid.write('# Time (s)\tx (m)\ty (m)\tangle (deg.)\n')
         self.datfid.flush()
         self.log = logging.getLogger(self.name+':'+self.thread.getName())
         self.log.setLevel(self.loglvl)
@@ -412,14 +413,16 @@ class Rover:
                     [self.x, self.y, self.angle] = [
                         float(_fields[0]), float(_fields[1]),
                         float(_fields[2])]
-                    if [self.xold, self.yold] != [self.x, self.y]:
+                    if [self.xold, self.yold self.angold] != [
+                            self.x, self.y self.angle]:
                         # _msgdat = '{t}\t{x}\t{y}'.format(
                         #     t=time(), x=self.x, y=self.y)
-                        _msgdat = '%.1f\t%.3f\t%.3f\n' % (
-                            time(), self.x, self.y)
+                        _msgdat = '%.1f\t%.3f\t%.3f\t%.3f\n' % (
+                            time(), self.x, self.y, self.angle)
                         self.datfid.write(_msgdat)
                         self.datfid.flush()
-                        [self.xold, self.yold] = [self.x, self.y]
+                        [self.xold, self.yold self.angold] = [
+                            self.x, self.y self.angle]
                     if self.ackflag and self.state == 0:  # st_IDLE
                         if self.superstate == -1:
                             self.ackflag = False
@@ -568,7 +571,13 @@ class Rover:
             inl, outl, exl = select.select(
                 [self.conn], [], [], 0.1)  # timeout necessary
             if self.conn in inl:
-                _inpacket = self.conn.recv(2048).decode()
+                try:
+                    _inpacket = self.conn.recv(2048).decode()
+                except socket.error:
+                    self.die()
+                    break
+                else:
+                    pass
                 if not _inpacket:
                     # _message has no content. Die.
                     self.die()
