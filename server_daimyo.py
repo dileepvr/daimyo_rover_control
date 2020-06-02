@@ -31,6 +31,8 @@ from tornado.web import StaticFileHandler
 from bokeh.embed import server_document
 import asyncio
 
+# Change below to LAN IP address if you want access to webGUI over LAN
+webapp_addr = 'localhost:5006'
 
 mainlock = threading.RLock()
 if not os.path.exists('maps'):  # Store map (json) files here
@@ -51,7 +53,7 @@ env = Environment(loader=FileSystemLoader('web_templates'))
 class IndexHandler(RequestHandler):
     def get(self):
         template = env.get_template('embed.html')
-        script = server_document('http://localhost:5006/webapp')
+        script = server_document('http://'+webapp_addr+'/webapp')
         self.write(template.render(script=script, template="Tornado"))
 
 
@@ -1204,6 +1206,8 @@ def webUIfunc():
     # Start this in its own kill-able thread
     staticpath = 'web_templates'
     webUIserver = Server({'/webapp': webapp}, num_procs=1,
+                         allow_websocket_origin=[
+                             webapp_addr, 'localhost:5006'],
                          extra_patterns=[('/', IndexHandler),
                                          ('/web_templates/(.*)',
                                           StaticFileHandler,
