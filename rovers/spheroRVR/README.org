@@ -161,3 +161,10 @@ See it in action at: [[https://open.lbry.com/@dileepvr:8/daimyo:c?r=FbgQb2CExk5X
 6. There is a way to change the daimyo server IP and port for each rover in
    a non-persistent manner using the tcp debug port (=8082=). Refer to the
    output of the =<help>= command.
+* Credits
+
+Check out these other projects that I borrowed code and ideas from:
+
+- Evan Weinberg: [[https://github.com/emwdx/microbit_grove_ultrasonic_RVR]]
+- Mike Jipping: [[https://github.com/frethop/librvr2]]
+- Rub Merriam: [[https://bitbucket.org/rmerriam/rvr-cpp/wiki/Home]]
