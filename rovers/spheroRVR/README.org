@@ -1,0 +1,163 @@
+* Sphero RVR conversion to work with Daimyo
+
+The [[https://sphero.com/products/rvr][Sphero RVR]] is a rover designed and manufactured by Sphero Inc. It is
+meant to be controlled via Bluetooth. However, they provided =UART= pins
+for serial communication, allowing us to communicate with it.
+
+[[./figures/fig00.png]]
+
+I managed to hookup an =ESP-12E= development board (also known as a
+=nodeMCU=, a breakout board for the =ESP8266= wifi chip), along with a
+=HC-SR04= ultrasonic rangefinder, a [[https://www.sparkfun.com/products/14571][Sparkfun MLX90393]] breakout board for a
+compass, and a couple of limit switches together into the following
+circuit:
+
+[[./figures/rvr_hat.png]]
+
+The =MLX90393= breakout board hung upside-down below the nodeMCU. The
+=Sphero RVR= has inbuilt tachometers and IMU for dead reckoning distance
+and angular turns.
+
+See it in action at: [[https://open.lbry.com/@dileepvr:8/daimyo:c?r=FbgQb2CExk5X4MCx4Un7dSG9naxWm3ys][video in LBRY]]
+
+* Prepare your computer to program the NodeMCUs atop the RVRs
+  :PROPERTIES:
+  :ID:       6ccda119-dfbf-495d-9754-5c18fe3e04f3
+  :END:
+
+1. Download the [[https://www.arduino.cc/en/main/software][arduino IDE GUI]] from their website.
+
+2. Start Arduino and open =File->Preferences= window.
+
+   [[./figures/fig01.png]]
+
+3. Enter =https://arduino.esp8266.com/stable/package_esp8266com_index.json=
+   into =Additional Board Manager= URLs field. You can add multiple URLs,
+   separating them with commas.
+
+4. Open Boards Manager from =Tools->Board menu= and find =esp8266=
+   platform. Click install button.
+
+   [[./figures/fig02.png]]
+
+5. =NodeMCU 1.0 (ESP-12E Module)= should now show up in the list of
+   available boards in the =Tools->Board= menu.
+
+6. Download the [[https://github.com/tedyapo/arduino-MLX90393][=arduino-MLX90393=]] library and unzip the files into the
+   arduinoIDE's default =libraries= folder (inside the default =sketchbook=
+   folder on your computer).
+
+7. Cop the files inside [[./firmware][firmware]] folder into your sketchbook folder. Create
+   a project folder named =rover_organs= containing these four files:
+   - [[./firmware/rover_organs.ino][rover_organs.ino]]
+   - [[./firmware/organs.h][organs.h]]
+   - [[./firmware/rvrclass.cpp][rvrclass.cpp]]
+   - [[./firmware/rvrclass.h][rvrclass.h]]
+
+8. Open the [[./firmware/rover_organs.inp][rover_organs.ino]] file from within the arduino IDE. This will
+   open all four files in separate tabs. Modify the =SSID= and =password=
+   variables to match your WiFi network. Select the =NodeMCU 1.0= board
+   from the board menu inside the =Tools= popup, and now you should be able
+   to compile the code by clicking the "Tick-mark" button. If a =NodeMCU=
+   has been preprogrammed to join your LAN network over WiFi and has the
+   correct setup for using the =ArduinoOTA= library, then it should show up
+   as an entry (with IP address) in the =Tools->Port= menu (fig.
+   \ref{fig03}). This will allow you to program the =NodeMCU= over WiFi.
+   But make sure to include the WiFi connection code and the =ArduinoOTA=
+   instructions in the new program, or you'll lock yourself out from the
+   =NodeMCU=, and will have to resort to the old =USB= method to program
+   it.
+
+   [[./figures/fig03.png]]
+
+* Connecting to the rovers
+
+1. Connect your computer to the WiFi network. Locate the file
+   [[./tcp_client.py]] in the current directory.
+
+2. Place a =NodeMCU= mounted Sphero RVR on the floor with plenty of room
+   around it. Remove the jumper across the header pins (fig. \ref{fig04})
+   and turn the RVR on. This will power the =NodeMCU= as well. After the
+   RVR has fully booted (the LEDS start slowly "breathing" different hues),
+   close the jumper connection. The jumper connects the serial =Tx= pin of
+   the =NodeMCU= to the RVR's serial =Rx= pin. The =NodeMCU= spits out
+   bootloader log details when booting, and its =Tx= pin should not be
+   connected to the RVR's =Rx= pin, or the RVR becomes unresponsive and
+   will need to be power cycled (with the jumper disconnected). Same with
+   pressing the =RST= (reset) button on the =NodeMCU=. Programming the
+   =NodeMCU= over the air can be done with the jumper closed without issue.
+
+   [[./figures/fig04.png]]
+
+3. The =NodeMCU= was preprogrammed with =ArduinoOTA= code and with
+   instructions to connect to =rover_wifi=. Since you are on the same
+   network, you can ping its IP address.
+
+4. Open the arduino IDE while on the =rover_wifi= network and select the
+   RVR's IP address in the =Port= submenu. You will now be able to program
+   it with the =rover_organs= program over the air. Unless you need to
+   change something about its inner workings, you will only need to do this
+   once.
+
+5. It has also been programmed to listen on port =8082= for a =TCP=
+   connection. This is a debug portal. From the =ssh= session through
+   =roverpi=, or from your own computer, you can open a =TCP= connection
+   using the =tcp_client.py= file. Just execute the following command:
+
+   #+begin_src shell :eval no
+     python3 tcp_client.py <IP-address-of-RVR> 8082
+   #+end_src
+
+6. You can now type ASCII strings, and if they are enclosed between angle
+   brackets, they will be transmitted to the RVR. Type =<help>= and hit
+   enter. This should give you a list of valid commands and their
+   descriptions. Commands that need to communicate with the RVR will only
+   work if the jumper (see figure above) is closed.
+
+7. Let's calibrate the Sparkfun =MLX90393= digital compass breakout board.
+   With some room around the RVR on the floor, type =<calib_on>=, and watch
+   the RVR rotate in 5 degree increments and record the minimum and maximum
+   magnetic-field readings along both its local axes. Let it make at least
+   two complete 360-degree turns, and then send =<calib_off>=. Now send
+   =<north>=, and it will return the angle of its orientation relative to
+   its conception of the magnetic north. The calibration data gets written
+   onto EEPROM and survives power cycles. But it is a good idea to calibrate
+   at the start of every data session, and in every new field environment.
+
+8. You can send =<poweroff>=, and the RVR (and the =NodeMCU=) will power
+   down in five seconds. Type =quit= without the angle brackets to quit the
+   tcp session in your terminal. Remember to remove the jumper before
+   powering the RVR on again.
+
+* Working with the daimyo control server
+
+1. The [[https://github.com/dileepvr/daimyo_rover_control][daimyo rover control server]] is already well documented on its README
+   page. I recommend familiarizing yourself with it using dummy virtual
+   rovers before starting with real ones.
+
+2. Inside the =daimyo_rover_control= folder in the home directory, run:
+
+   #+begin_src shell :eval no
+     python3 server_daimyo.py -i -d -w
+   #+end_src
+
+3. If you turn on an RVR loaded with the supplied =rover_organs= firmware
+   (with the jumper disconnected at first), it should automatically join
+   the daimyo server instance, and the terminal display should confirm
+   this. Alternatively, while still on the =rover_wifi= LAN, open your
+   browser and visit the URL [[http://<SERVER_IP>:5006]]. This should open a
+   web GUI for the daimyo server. Changes made with the web GUI are
+   persistent, and the browser can be closed and reopened.
+
+4. To connect an RVR that is not on the daimyo server (perhaps because it
+   was turned on before the daimyo server was running, or because it was
+   kicked out from the server), open a tcp connection to its debug port
+   (=8082=) and send =<reset>=. It should now attempt to join the server.
+
+5. A good first command to send is =SETPOS=, where you set its position and
+   let it know how your map axes are aligned with the magnetic north. Make
+   sure that the RVR's compass is well calibrated for good results.
+
+6. There is a way to change the daimyo server IP and port for each rover in
+   a non-persistent manner using the tcp debug port (=8082=). Refer to the
+   output of the =<help>= command.

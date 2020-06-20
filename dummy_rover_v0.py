@@ -27,7 +27,7 @@ servercommand = ''
 # Field rover state variables
 name = 'Ronin%d' % np.random.randint(low=0, high=99)
 version = '0'
-IP_address = 'localhost'  # command server IP
+IP_address = '192.168.4.1'  # command server IP
 Port = 8081  # command server port
 Nangle = 90.0  # Nangle is between north and x-axis
 xpos = 2*np.random.random()-1

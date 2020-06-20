@@ -58,9 +58,8 @@ having the rovers hop between them in arbitrary sequences can mimic fairly
 complex path-finding behavior without the need for image processing or
 excessive computational and memory resources.
 
-I will eventually be uploading the hardware schematics and firmware for a
-rover that is meant to work with =daimyo server=. Link to that repository
-coming soon.
+The hardware schematics and firmware for some field rovers can be found in
+the [[./rovers]] folder.
 
 * How it works under the hood
 

@@ -251,7 +251,7 @@ class Rover:
                         self.superstate = self.numseq - 1
                     self.log.info('Sequence starting at %d of %d.' % (
                         self.superstate, self.numseq-1))
-                    self.ackflag = False
+                    self.ackflag = True
                     self.state = 0
                     self.pause = False
             else:

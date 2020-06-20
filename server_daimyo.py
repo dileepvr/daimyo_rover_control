@@ -32,7 +32,11 @@ from bokeh.embed import server_document
 import asyncio
 
 # Change below to LAN IP address if you want access to webGUI over LAN
+<<<<<<< HEAD
+webapp_addr = '192.168.0.17:5006'
+=======
 webapp_addr = 'localhost:5006'
+>>>>>>> 073e517aa4ff189a33439649b35c6a237b9785de
 
 mainlock = threading.RLock()
 if not os.path.exists('maps'):  # Store map (json) files here
@@ -326,7 +330,7 @@ def webapp(doc):
     global aturndict, cturndict, gotodict, obsdict, pobsdict, searchdict
     global fcmdsource, tempglobdict
     setposdict = dict([('names', ['x (m)', 'y (m)', '[angle (deg.)]']),
-                       ('values', [0.0, 0.0, 0.0])])
+                       ('values', [0.0, 0.0, dnorth.data['ang'][0]])])
     fwddict = dict([('names', ['distance (m)', '[speed (m/s)]',
                                '[timeout (s)]']),
                     ('values', [0.1, 0.2, None])])
@@ -346,7 +350,7 @@ def webapp(doc):
                       ('values', [0, None])])
     gotodict = dict([('names', ['x (m)', 'y (m)', '[speed (m/s)]',
                                 '[end angle (deg.)]', '[timeout (s)]']),
-                     ('values', [0.0, 0.0, 0.1, None, None])])
+                     ('values', [0.0, 0.0, None, None, None])])
     obsdict = dict([('names', ['[angle (deg.)]', '[timeout (s)]']),
                     ('values', [180.0, None])])
     pobsdict = dict([('names', ['distance (m)', '[angle (deg.)]',
@@ -825,9 +829,9 @@ def webapp(doc):
             rover.lock.acquire()
             rover.command = '<'+cmdstring+'>'
             rover.cflag = True
+            rover.lock.release()
             set_logbox(text='Sent &lt;%s&gt; to %s.' % (cmdstring,
                                                         rover.name))
-            rover.lock.release()
 
     def send_fcmd(cmdstring='OBS', fields=['', '']):
         global rover_indx
@@ -838,11 +842,11 @@ def webapp(doc):
             for field in fields:
                 rover.command += ',' + field
             rover.command += '>'
+            rover.cflag = True
+            rover.lock.release()
             sentcmd = 'Sent &lt;%s&gt; to %s.' % (rover.command[1:-1],
                                                   rover.name)
             set_logbox(text=sentcmd)
-            rover.cflag = True
-            rover.lock.release()
             if cmdstring == 'SETPOS':
                 webroverlist['xhist'][rover_indx] = [0]
                 webroverlist['yhist'][rover_indx] = [0]
@@ -958,10 +962,11 @@ def webapp(doc):
                     rover.seqlist = webroverlist['seqlist'][rover_indx][1:]
                     rover.numseq = len(rover.seqlist)
                     rover.loopflag = _line1j['loopflag']
-                    if _line1j['start'] < rover.numseq:
-                        rover.superstate = _line1j['start']
-                    else:
-                        rover.superstate = rover.numseq - 1
+                    # if _line1j['start'] < rover.numseq:
+                    #     rover.superstate = _line1j['start']
+                    # else:
+                    #     rover.superstate = rover.numseq - 1
+                    rover.superstate = -2
                     rover.ackflag = False
                     rover.state = 0  # IDLE
                     rover.pause = False
