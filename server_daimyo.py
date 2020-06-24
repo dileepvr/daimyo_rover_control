@@ -32,11 +32,7 @@ from bokeh.embed import server_document
 import asyncio
 
 # Change below to LAN IP address if you want access to webGUI over LAN
-<<<<<<< HEAD
-webapp_addr = '192.168.0.17:5006'
-=======
 webapp_addr = 'localhost:5006'
->>>>>>> 073e517aa4ff189a33439649b35c6a237b9785de
 
 mainlock = threading.RLock()
 if not os.path.exists('maps'):  # Store map (json) files here
